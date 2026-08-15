@@ -629,4 +629,4 @@ function main(outDir) {
   console.log(`\n${report.length + 1} icons written and verified.`);
 }
 
-main(resolve(process.argv[2] || fileURLToPath(new URL('../icons/', import.meta.url))));
+main(resolve(process.argv[2] || fileURLToPath(new URL('../assets/icons/', import.meta.url))));

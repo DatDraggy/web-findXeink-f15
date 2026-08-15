@@ -32,7 +32,7 @@
  * Otherwise you will spend an hour debugging code you are not running.
  */
 
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 
 /** Prefix shared by every cache this app owns, so we can tell ours from a neighbour's. */
 const CACHE_PREFIX = 'web-findxeink-f15-';
@@ -67,11 +67,11 @@ const APP_SHELL = [
   './js/runner.js',
   './js/storage.js',
   './js/util.js',
-  './icons/favicon.svg',
-  './icons/apple-touch-icon.png',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-maskable-512.png',
+  './assets/icons/favicon.svg',
+  './assets/icons/apple-touch-icon.png',
+  './assets/icons/icon-192.png',
+  './assets/icons/icon-512.png',
+  './assets/icons/icon-maskable-512.png',
 ];
 
 self.addEventListener('install', (event) => {

@@ -121,7 +121,7 @@
 </IfModule>
 
 # No directory listings. There is nothing secret here — the whole app is source
-# — but /icons/ and /js/ are not pages and should not render as ones.
+# — but /assets/ and /js/ are not pages and should not render as ones.
 <IfModule mod_autoindex.c>
   Options -Indexes
 </IfModule>

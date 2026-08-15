@@ -87,7 +87,7 @@ js/storage.js       IndexedDB persistence (the one module allowed to touch a bro
 js/util.js          small shared helpers
 sw.js               service worker: cache-first app shell, network as the fallback
 serve.js            dev server (HTTPS + self-signed cert). Not part of the deployed site.
-tools/make-icons.js regenerates icons/ — run it if you change the artwork
+tools/make-icons.js regenerates assets/icons/ — run it if you change the artwork
 test/*.test.js      one per module
 _headers            security headers for Cloudflare Pages / Netlify — the annotated original
 vercel.json         the same headers for Vercel
