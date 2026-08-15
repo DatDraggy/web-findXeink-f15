@@ -64,7 +64,7 @@ The HTTPS is not optional: `navigator.bluetooth` does not exist on a plain `http
 the app cannot work there at all. (`http://localhost` is fine — browsers treat loopback as secure.)
 
 ```
-npm test      # 470+ assertions, no dependencies
+npm test      # 851 assertions, no dependencies
 ```
 
 ### Deploying
