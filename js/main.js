@@ -38,7 +38,43 @@ const app = {
   program: { blocks: [] },
   lastRendered: null,
   logLines: [],
+  thumbUrls: {},
 };
+
+// ──────────────────────────────────────────────────────────────── modal
+
+let modalResolve = null;
+
+/**
+ * A promise-based sheet. Returns whatever `getValue()` yields on confirm, or
+ * null if the user backs out — so callers read as `const id = await pickImage()`.
+ */
+function openModal({ title, html, showOk = false, getValue = () => true, onMount }) {
+  $('modal-title').textContent = title;
+  $('modal-body').innerHTML = html;
+  $('modal-ok').hidden = !showOk;
+  $('modal').hidden = false;
+  onMount?.($('modal-body'));
+
+  return new Promise((resolve) => {
+    modalResolve = (confirmed) => {
+      modalResolve = null;
+      $('modal').hidden = true;
+      $('modal-body').innerHTML = '';
+      resolve(confirmed ? getValue() : null);
+    };
+  });
+}
+
+function closeModal(confirmed) {
+  modalResolve?.(confirmed);
+}
+
+$('modal-cancel').onclick = () => closeModal(false);
+$('modal-ok').onclick = () => closeModal(true);
+// Tapping the backdrop or pressing Escape both mean "no".
+$('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modalResolve) closeModal(false); });
 
 // ─────────────────────────────────────────────────────────────── chrome
 
@@ -511,24 +547,35 @@ $('btn-save-send').onclick = async () => {
   $('btn-send').click();
 };
 
+/**
+ * One object URL per thumbnail, minted on refresh and revoked on the next one.
+ * The library grid, the automation blocks and the picker all read from here —
+ * creating a URL per render instead would leak one for every repaint.
+ */
+function refreshThumbUrls() {
+  for (const url of Object.values(app.thumbUrls)) URL.revokeObjectURL(url);
+  app.thumbUrls = {};
+  for (const it of app.library) {
+    if (it.thumb instanceof Blob) app.thumbUrls[it.id] = URL.createObjectURL(it.thumb);
+  }
+}
+
+function thumbFor(id) {
+  return app.thumbUrls[id] || '';
+}
+
 async function refreshLibrary() {
   app.library = await store.listImages();
+  refreshThumbUrls();
   const grid = $('lib-grid');
   $('lib-count').textContent = app.library.length ? `${app.library.length} item(s)` : '';
   $('lib-empty').hidden = app.library.length > 0;
   grid.innerHTML = app.library.map((it) => `
     <div class="tile${it.id === app.selectedId ? ' sel' : ''}" data-id="${esc(it.id)}">
-      ${it.thumbUrl ? `<img src="${it.thumbUrl}" alt="">` : '<img alt="">'}
+      <img src="${esc(thumbFor(it.id))}" alt="">
       <div class="nm">${esc(it.name)}</div>
     </div>`).join('');
 
-  // Object URLs for the thumbnails are created here and revoked on the next pass.
-  for (const it of app.library) {
-    if (it.thumb instanceof Blob) {
-      const el = grid.querySelector(`.tile[data-id="${CSS.escape(it.id)}"] img`);
-      if (el) el.src = URL.createObjectURL(it.thumb);
-    }
-  }
   $$('#lib-grid .tile').forEach((t) => {
     t.onclick = () => { app.selectedId = t.dataset.id; refreshLibrary(); };
   });
@@ -609,7 +656,20 @@ $('btn-lib-edit').onclick = async () => {
 $('btn-lib-rename').onclick = async () => {
   const sel = app.library.find((i) => i.id === app.selectedId);
   if (!sel) return;
-  const name = prompt('Name', sel.name);
+  const name = await openModal({
+    title: 'Rename picture',
+    html: `<label for="rename-input" class="sr-only">Name</label>
+      <input id="rename-input" value="${esc(sel.name)}" maxlength="80">`,
+    showOk: true,
+    getValue: () => $('rename-input').value,
+    onMount(body) {
+      const input = body.querySelector('#rename-input');
+      input.focus();
+      input.select();
+      // Enter is what everyone reaches for in a one-field dialog.
+      input.onkeydown = (e) => { if (e.key === 'Enter') closeModal(true); };
+    },
+  });
   if (name == null) return;
   await store.renameImage(sel.id, name.trim() || sel.name);
   refreshLibrary();
@@ -665,10 +725,25 @@ function blockLabel(b) {
   switch (b.type) {
     case 'picture': {
       const it = app.library.find((i) => i.id === b.imageId);
-      return { icon: '▣', title: it ? it.name : 'Missing picture', sub: it ? '' : 'deleted from the library', cls: '' };
+      return {
+        icon: '▣',
+        thumb: it ? thumbFor(it.id) : '',
+        title: it ? it.name : 'Missing picture',
+        sub: it ? '' : 'no longer in the library — tap ✎ to pick another',
+        cls: it ? '' : 'invalid',
+      };
     }
-    case 'random':
-      return { icon: '🎲', title: 'Random picture', sub: b.pool === 'all' ? 'from the whole library' : `${b.pool.length} chosen`, cls: 'random' };
+    case 'random': {
+      const n = b.pool === 'all' ? app.library.length : (b.pool?.length || 0);
+      return {
+        icon: '🎲',
+        title: 'Random picture',
+        sub: b.pool === 'all'
+          ? `from the whole library (${n})`
+          : `from ${n} chosen picture${n === 1 ? '' : 's'}`,
+        cls: 'random',
+      };
+    }
     case 'wait':
       return { icon: '⏱', title: `Wait ${humanDuration(b.seconds)}`, sub: '', cls: 'wait' };
     case 'gotoStart':
@@ -685,7 +760,7 @@ function renderProgram() {
   list.innerHTML = blocks.map((b, i) => {
     const l = blockLabel(b);
     return `<div class="block ${l.cls}" data-i="${i}">
-      <span class="icon">${l.icon}</span>
+      ${l.thumb ? `<img class="icon-thumb" src="${esc(l.thumb)}" alt="">` : `<span class="icon">${l.icon}</span>`}
       <div class="body"><div class="t">${esc(l.title)}</div>${l.sub ? `<div class="s">${esc(l.sub)}</div>` : ''}</div>
       <div class="acts">
         <button data-act="up" title="Move up">↑</button>
@@ -722,35 +797,122 @@ function renderProgram() {
   $('btn-run').disabled = !v.ok;
 }
 
-function editBlock(i) {
+async function editBlock(i) {
   const b = app.program.blocks[i];
   if (b.type === 'wait') {
-    const s = prompt(`Seconds to wait (minimum ${auto.MIN_WAIT_SECONDS})`, b.seconds);
+    const s = await pickDuration(b.seconds);
     if (s == null) return;
-    b.seconds = Math.max(auto.MIN_WAIT_SECONDS, +s || auto.MIN_WAIT_SECONDS);
+    b.seconds = s;
   } else if (b.type === 'picture') {
-    const id = pickImagePrompt(b.imageId);
-    if (id) b.imageId = id;
+    const id = await pickImage({ selected: b.imageId });
+    if (!id) return;
+    b.imageId = id;
+  } else if (b.type === 'random') {
+    const all = app.library.map((it) => it.id);
+    const ids = await pickImage({
+      multi: true,
+      selected: b.pool === 'all' ? all : b.pool,
+      title: 'Pictures to choose from',
+    });
+    if (!ids) return;
+    if (!ids.length) { toast('Pick at least one picture'); return; }
+    // Collapse a full selection back to 'all' so the block keeps following the
+    // library as it grows, rather than freezing today's list into the program.
+    b.pool = ids.length === all.length ? 'all' : ids;
+  } else {
+    return;
   }
   saveProgram();
 }
 
-function pickImagePrompt(current) {
-  if (!app.library.length) { toast('Save a picture to the library first'); return null; }
-  const list = app.library.map((it, n) => `${n + 1}. ${it.name}`).join('\n');
-  const cur = app.library.findIndex((i) => i.id === current);
-  const ans = prompt(`Which picture?\n\n${list}`, String(cur >= 0 ? cur + 1 : 1));
-  if (ans == null) return null;
-  const idx = (+ans | 0) - 1;
-  return app.library[idx]?.id || null;
+/**
+ * Pick a picture — or several, for a random block's pool.
+ *
+ * You recognise a picture by looking at it, not by reading a filename out of a
+ * numbered list, which is what this replaces. Single-select commits on tap;
+ * multi-select toggles and waits for Done.
+ *
+ * @returns {Promise<string|string[]|null>} null if cancelled
+ */
+async function pickImage({ selected = null, multi = false, title } = {}) {
+  if (!app.library.length) {
+    toast('Save a picture in Studio first');
+    return null;
+  }
+  const chosen = new Set(multi ? (Array.isArray(selected) ? selected : []) : [selected].filter(Boolean));
+
+  const html = `<div class="pick-grid">${app.library.map((it) => `
+    <button type="button" class="pick${chosen.has(it.id) ? ' on' : ''}" data-id="${esc(it.id)}">
+      <img src="${esc(thumbFor(it.id))}" alt="">
+      <span class="tick">✓</span>
+      <div class="nm">${esc(it.name)}</div>
+    </button>`).join('')}</div>`;
+
+  return openModal({
+    title: title || (multi ? 'Pictures to choose from' : 'Which picture?'),
+    html,
+    showOk: multi,
+    getValue: () => (multi ? [...chosen] : [...chosen][0] || null),
+    onMount(body) {
+      body.querySelectorAll('.pick').forEach((el) => {
+        el.onclick = () => {
+          const { id } = el.dataset;
+          if (!multi) {
+            chosen.clear();
+            chosen.add(id);
+            closeModal(true);          // one tap is the whole interaction
+            return;
+          }
+          if (chosen.has(id)) chosen.delete(id); else chosen.add(id);
+          el.classList.toggle('on', chosen.has(id));
+        };
+      });
+    },
+  });
+}
+
+const DURATION_PRESETS = [
+  { label: '20 s', s: 20 }, { label: '1 min', s: 60 }, { label: '5 min', s: 300 },
+  { label: '15 min', s: 900 }, { label: '1 h', s: 3600 }, { label: '6 h', s: 21600 },
+  { label: '12 h', s: 43200 }, { label: '24 h', s: 86400 },
+];
+
+/** @returns {Promise<number|null>} seconds, or null if cancelled */
+async function pickDuration(current) {
+  let value = Math.max(auto.MIN_WAIT_SECONDS, Number(current) || auto.MIN_WAIT_SECONDS);
+  const html = `
+    <div class="presets">${DURATION_PRESETS.map((p) => `
+      <button type="button" data-s="${p.s}"${p.s === value ? ' class="on"' : ''}>${p.label}</button>`).join('')}
+    </div>
+    <label for="dur-custom">Or a custom time, in seconds</label>
+    <input id="dur-custom" type="number" min="${auto.MIN_WAIT_SECONDS}" step="1" value="${value}">
+    <p class="dim tiny">Minimum ${auto.MIN_WAIT_SECONDS} seconds — the panel physically needs that
+    long to redraw, so anything shorter is refused.</p>`;
+
+  return openModal({
+    title: 'Wait how long?',
+    html,
+    showOk: true,
+    getValue: () => Math.max(auto.MIN_WAIT_SECONDS, Math.round(value) || auto.MIN_WAIT_SECONDS),
+    onMount(body) {
+      const input = body.querySelector('#dur-custom');
+      const marks = () => body.querySelectorAll('.presets button').forEach((b) => {
+        b.classList.toggle('on', Number(b.dataset.s) === value);
+      });
+      body.querySelectorAll('.presets button').forEach((b) => {
+        b.onclick = () => { value = Number(b.dataset.s); input.value = String(value); marks(); };
+      });
+      input.oninput = () => { value = Number(input.value); marks(); };
+    },
+  });
 }
 
 $$('[data-add]').forEach((btn) => {
-  btn.onclick = () => {
+  btn.onclick = async () => {
     const type = btn.dataset.add;
     const bs = app.program.blocks;
     if (type === 'picture') {
-      const id = pickImagePrompt();
+      const id = await pickImage();
       if (!id) return;
       bs.push({ type: 'picture', imageId: id });
     } else if (type === 'random') {

@@ -18,15 +18,21 @@
  * Adding an ECI header would break more scanners than it fixes.
  *
  * VERIFICATION (see test/qrcode.test.js): the version 1-M symbol for "01234567"
- * reproduces the ISO/IEC 18004 Annex I worked example codeword for codeword; the
- * format and version information match Tables C.1 and D.1 exactly; and every
- * version 1..40 at all four levels and all eight masks is decoded back by an
- * independent decoder in the test file with zero Reed-Solomon syndromes.
+ * reproduces the ISO/IEC 18004 Annex I worked example codeword for codeword, data
+ * and error correction alike; the format and version information match Tables C.1
+ * and D.1 exactly; the function patterns land on the Annex E coordinates; version
+ * selection is pinned on both sides of every byte-mode capacity boundary; and every
+ * version 1..40 at all four levels — plus all eight masks at a spread of versions —
+ * is read back by an independent decoder in the test file with zero Reed-Solomon
+ * syndromes. Off-line, the whole v1..v40 x L/M/Q/H x 8-mask grid was also compared
+ * module for module against the `qrcode` npm package (1280/1280 identical); see
+ * CONTRIBUTING.md to repeat that pass.
  *
  * The mask penalty uses ZXing's formulation of the four rules rather than the
  * spec's prose, because that is the encoder most scanners were regression-tested
- * against. Mask choice never affects decodability — the chosen mask is recorded in
- * the format information — so this only matters for matching other encoders.
+ * against — and it agrees with ZXing's own mask choice on every payload tried.
+ * Mask choice never affects decodability — the chosen mask is recorded in the
+ * format information — so this only matters for matching other encoders.
  */
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -576,14 +582,18 @@ export function qrMatrix(text, opts) {
   if (!ECC_FORMAT_BITS.hasOwnProperty(ecc)) throw new Error('QR: unknown ecc level ' + o.ecc);
   // -1 is the internal "pick one" sentinel, so the range has to be checked before
   // the option collapses into it — otherwise an explicit mask of -1 would be read
-  // as "automatic" instead of being rejected.
+  // as "automatic" instead of being rejected. Numeric strings are accepted (they
+  // arrive straight from form controls) but anything else is a caller bug: `| 0`
+  // would quietly turn a typo into mask 0 and produce a symbol nobody asked for.
   let forced = -1;
   if (o.mask !== null && o.mask !== undefined) {
-    forced = o.mask | 0;
-    if (forced < 0 || forced > 7) throw new Error('QR: mask must be 0..7');
+    forced = Number(o.mask);
+    if (!Number.isInteger(forced) || forced < 0 || forced > 7) throw new Error('QR: mask must be 0..7');
   }
-  const minVersion = o.minVersion == null ? 1 : o.minVersion | 0;
-  if (minVersion < 1 || minVersion > 40) throw new Error('QR: minVersion must be 1..40');
+  const minVersion = o.minVersion == null ? 1 : Number(o.minVersion);
+  if (!Number.isInteger(minVersion) || minVersion < 1 || minVersion > 40) {
+    throw new Error('QR: minVersion must be 1..40');
+  }
 
   const seg = chooseSegment(str);
   const version = chooseVersion(seg, ecc, minVersion);
@@ -721,21 +731,23 @@ function vcardEscape(s) {
  * Build a vCard 3.0 string suitable for a QR contact card.
  *
  * @param {{name?:string, org?:string, title?:string, phone?:string, email?:string,
- *          url?:string, note?:string}} fields Empty fields are omitted.
+ *          url?:string, note?:string}} fields Empty fields are omitted, except the
+ *          mandatory N and FN which are always present even when nothing was typed.
  * @returns {string} CRLF-delimited vCard.
  */
 export function vcard(fields) {
   const f = fields || {};
   const lines = ['BEGIN:VCARD', 'VERSION:3.0'];
   const name = (f.name || '').trim();
-  if (name) {
-    // N is mandatory in 3.0 and structured as Family;Given;Middle;Prefix;Suffix.
-    // We only ever get a display name, so treat the last word as the family name.
-    const parts = name.split(/\s+/);
-    const family = parts.length > 1 ? parts.pop() : '';
-    lines.push(`N:${vcardEscape(family)};${vcardEscape(parts.join(' '))};;;`);
-    lines.push(`FN:${vcardEscape(name)}`);
-  }
+  // N and FN are both mandatory in vCard 3.0 (RFC 2426 §3.1), and phone importers do
+  // reject a card that is missing them, so both are always emitted — the display name
+  // falling back to the organisation and then the e-mail when no name was typed.
+  // N is structured Family;Given;Middle;Prefix;Suffix; we only ever get a display
+  // name, so the last word becomes the family name and a lone word stays a given name.
+  const parts = name ? name.split(/\s+/) : [];
+  const family = parts.length > 1 ? parts.pop() : '';
+  lines.push(`N:${vcardEscape(family)};${vcardEscape(parts.join(' '))};;;`);
+  lines.push(`FN:${vcardEscape(name || (f.org || '').trim() || (f.email || '').trim())}`);
   if (f.org) lines.push(`ORG:${vcardEscape(f.org)}`);
   if (f.title) lines.push(`TITLE:${vcardEscape(f.title)}`);
   if (f.phone) lines.push(`TEL;TYPE=CELL:${vcardEscape(f.phone)}`);
@@ -747,12 +759,26 @@ export function vcard(fields) {
 }
 
 /**
- * Escape a Wi-Fi field. Values that look like hex would be read as a raw hex key,
- * so those get quoted — a password of "12345678" is not the same as 0x12345678.
+ * Lengths, in hex digits, that a raw (unhashed) WEP or WPA key can actually have:
+ * WEP-40, WEP-104, WEP-128, WEP-232 and a WPA PSK. Nothing else is ambiguous.
+ */
+const RAW_KEY_HEX_LENGTHS = new Set([10, 26, 32, 58, 64]);
+
+/**
+ * Escape one WIFI: field. Only the five characters MECARD/ZXing define are escaped:
+ * a backslash in front of anything else survives ZXing's permissive unescaper but
+ * reaches Android's Wi-Fi QR parser as a literal backslash, which silently joins
+ * with the wrong password.
  */
 function wifiEscape(s) {
-  const v = String(s).replace(/([\\;,:"'])/g, '\\$1');
-  return /^[0-9a-fA-F]+$/.test(String(s)) && String(s).length % 2 === 0 ? `"${v}"` : v;
+  const raw = String(s);
+  const v = raw.replace(/([\\;,:"])/g, '\\$1');
+  // A value that is all hex digits AND exactly as long as a real key is ambiguous —
+  // the reader may take it as key bytes rather than a passphrase — so it gets quoted.
+  // Quoting every hex-looking value instead would be worse: "12345678" is one of the
+  // most common passphrases there is, no key is 8 hex digits long, and a reader that
+  // does not strip the quotes would try to join with `"12345678"` including them.
+  return /^[0-9a-fA-F]+$/.test(raw) && RAW_KEY_HEX_LENGTHS.has(raw.length) ? `"${v}"` : v;
 }
 
 /**

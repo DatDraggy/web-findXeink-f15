@@ -357,6 +357,15 @@ canvas.preview {
 .block.invalid { border-color: var(--bad); }
 
 .block .icon { font-size: 17px; flex: none; width: 22px; text-align: center; }
+.block .icon-thumb {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: 5px;
+  background: #000;
+  image-rendering: pixelated;
+}
 .block .body { flex: 1; min-width: 0; }
 .block .body .t { font-size: 14px; }
 .block .body .s { font-size: 11px; color: var(--dim); }
@@ -437,6 +446,119 @@ code {
   font-family: var(--mono);
   font-size: 0.88em;
 }
+
+/* Modal — picture picker and duration editor */
+#modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.66);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+#modal[hidden] { display: none; }
+
+.modal-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px 14px 0 0;
+  width: 100%;
+  max-width: 560px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  animation: sheet 0.18s ease;
+}
+@keyframes sheet { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+@media (min-width: 560px) {
+  #modal { align-items: center; padding: 20px; }
+  .modal-card { border-radius: 14px; }
+}
+
+.modal-card > h2 {
+  font-size: 15px;
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+#modal-body { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid var(--line-soft);
+}
+.modal-actions .btn { margin: 0; }
+
+/* A picker tile shows the picture, because a filename is not what you recognise. */
+.pick-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 10px;
+}
+.pick {
+  background: var(--panel-2);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  position: relative;
+}
+.pick.on { border-color: var(--accent); }
+.pick img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  display: block;
+  background: #000;
+  image-rendering: pixelated;
+}
+.pick .nm {
+  font-size: 11px;
+  padding: 5px 6px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pick .tick {
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 13px;
+  font-weight: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.pick.on .tick { display: flex; }
+
+/* Quick durations, so the common cases are one tap. */
+.presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.presets button {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  border-radius: 999px;
+  padding: 9px 14px;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.presets button.on { border-color: var(--accent); color: var(--accent); }
 
 /* Toast */
 #toast {

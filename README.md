@@ -159,6 +159,18 @@ and no OTA — every other feature in this app is done on our side.
 Replies: `A1`/`C1` = READY (echoing the start payload back), `F1` = status, code in the first payload
 byte — `0` success, `2` aborted, `5` low battery, `6` busy.
 
+### The two screens
+
+`A1`/`A2` write the main picture. `C1`/`C2` write a second stored image — the "contact screen" the
+firmware swaps to when you **double-press** the device's single button. Both paths are confirmed on
+hardware.
+
+Worth knowing before you use it: the contact screen is **shown temporarily**. The panel renders it
+immediately, then reverts to the main picture after a delay on its own. So it behaves like a peek,
+not a mode you switch into — which is exactly right for a lost-and-found tag or a name badge you
+show someone, and is why the app keeps the two destinations separate rather than treating the
+contact screen as just another slot.
+
 ### Image format
 
 | | 2 bpp (type ≥ 1) | 1 bpp (type < 1) |
