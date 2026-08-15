@@ -89,6 +89,9 @@ sw.js               service worker: cache-first app shell, network as the fallba
 serve.js            dev server (HTTPS + self-signed cert). Not part of the deployed site.
 tools/make-icons.js regenerates icons/ — run it if you change the artwork
 test/*.test.js      one per module
+_headers            security headers for Cloudflare Pages / Netlify — the annotated original
+vercel.json         the same headers for Vercel
+.htaccess.sample    the same headers for Apache (rename to .htaccess to use it)
 ```
 
 Only `main.js` and `render.js` may touch the DOM, and **no module may touch `document`, `window`,
@@ -140,9 +143,11 @@ soft-reset the device into a bootloader nobody has an image for.
   already has the old files keeps serving them — changing index.html or a module and not bumping
   means the fix reaches nobody who has ever opened the app. Bumping changes `sw.js` itself, which is
   what makes the browser install a new worker, refill a fresh cache and bin the old one.
-* `_headers` and `vercel.json` must express the same policy. `_headers` carries the
-  reasoning in comments (JSON has none) — change it there first, then mirror it, then mirror it into
-  `SECURITY_HEADERS` in `serve.js`.
+* **Four files carry the security headers and all four must say the same thing:** `_headers`
+  (Cloudflare Pages, Netlify), `vercel.json`, `.htaccess.sample` (Apache) and `SECURITY_HEADERS` in
+  `serve.js`. `_headers` is the source of truth and carries the reasoning in comments — change it
+  there first, then mirror it into the other three. `serve.js` sends them in development precisely so
+  a policy mistake surfaces before the deploy, which only works while it stays in step.
 * Deploy is a file copy. There is nothing to build.
 
 ## Re-verifying the QR encoder

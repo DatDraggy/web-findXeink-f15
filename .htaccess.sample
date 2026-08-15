@@ -1,0 +1,134 @@
+# Apache response headers for Web FindXeink F15 — SAMPLE.
+#
+# Rename to `.htaccess` and drop it in the directory you deployed the app to.
+# It is shipped under a different name on purpose: a live `.htaccess` takes
+# effect the moment it lands, and half the point of this file is that you read
+# it first.
+#
+# Requirements: mod_headers enabled, and `AllowOverride FileInfo Indexes` (or
+# `All`) for this directory in the server config. With `AllowOverride None` —
+# the httpd 2.4 default — Apache silently ignores the whole file and you deploy
+# with no hardening at all. Check with `apachectl -M | grep headers` and by
+# looking for the headers in `curl -I` output, not by assuming.
+#
+# Every directive is wrapped in `<IfModule>`. Without that, an unknown directive
+# in a .htaccess file is not skipped, it is a fatal 500 for every request to
+# this directory — a broken site instead of an unhardened one.
+#
+# This is the Apache twin of `_headers` (Cloudflare Pages, Netlify) and
+# `vercel.json`, and of SECURITY_HEADERS in `serve.js`. All four express the
+# same policy and all four must be changed together. `_headers` carries the full
+# reasoning; the condensed version is below.
+#
+# Being a per-directory file, this works unmodified when the app is hosted from
+# a subdirectory (example.com/findxeink/) — it applies to its own directory and
+# everything under it, and no path is written down anywhere. The app's own URLs
+# are all relative for the same reason.
+
+<IfModule mod_headers.c>
+
+  # `always` rather than the default `onsuccess` table: without it these headers
+  # are attached to 2xx responses only, and the 404 and 500 pages — the ones
+  # most likely to render something unexpected — ship with no CSP and no nosniff.
+
+  # ---------------------------------------------------------------------------
+  # Content-Security-Policy
+  #
+  # connect-src is 'self', NOT 'none', and that is the one deliberate difference
+  # from "deny everything unused". The app makes no network request at runtime,
+  # so 'none' looks right, but it would break the service worker:
+  #
+  #   * Registration is fine either way — fetching sw.js is matched by
+  #     worker-src, never connect-src, and so is the <link rel="manifest">
+  #     fetch (manifest-src). Neither is the problem.
+  #   * Everything the worker does AFTER that is a connect-src request. It runs
+  #     under the CSP delivered with its own script response — this one — and
+  #     both plain fetch() and cache.add()/addAll() are defined in terms of
+  #     fetch with an empty request destination, which lands in connect-src.
+  #
+  # So under 'none' the worker installs, activates, and never fetches a byte:
+  # nothing precached, and since it is cache-first, no fallback for any miss it
+  # then handles. It fails silently and it fails worse than not registering at
+  # all. 'self' is the narrowest value that actually works; it still blocks
+  # every cross-origin request, so a photo read out of the phone's library has
+  # no path off this origin. Web Bluetooth is not governed by CSP, so nothing
+  # here touches the device link.
+  #
+  # script-src 'self' forbids inline <script>; style-src 'self' forbids <style>
+  # blocks AND style="..." attributes. img-src allows data: and blob: because
+  # the preview canvas and the file picker produce exactly those.
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+
+  # ---------------------------------------------------------------------------
+  # Permissions-Policy: deny everything, then hand back the two features we use.
+  #
+  #   bluetooth=(self)          Web Bluetooth. The whole point of the app.
+  #   screen-wake-lock=(self)   The automation runner holds a wake lock so a long
+  #                             image queue survives the screen locking.
+  #
+  # Everything else gets an empty allowlist `()`: not merely unused, but
+  # unavailable, so a careless future edit cannot quietly start using one.
+  # Browsers that do not know a feature name ignore that entry.
+  Header always set Permissions-Policy "accelerometer=(), ambient-light-sensor=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), payment=(), serial=(), usb=(), bluetooth=(self), screen-wake-lock=(self)"
+
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "no-referrer"
+  Header always set Cross-Origin-Opener-Policy "same-origin"
+
+  # Deliberately NOT set here: Strict-Transport-Security. It is a commitment
+  # made by the whole origin, not by this directory, and turning it on from a
+  # subdirectory config would lock every other app on the domain out of plain
+  # HTTP too. Set it once in the server config for the domain, if the domain is
+  # ready for it. (`_headers` and `vercel.json` omit it for the same reason.)
+
+  # ---------------------------------------------------------------------------
+  # The three files that decide whether an update is ever seen.
+  #
+  # Everything else reaches the browser through the service worker and is
+  # versioned by CACHE_VERSION in sw.js. These are fetched by the browser
+  # itself. sw.js is the critical one: the worker is replaced only when the
+  # browser sees that its bytes changed, so an HTTP-cached sw.js is a worker
+  # that can never be updated — and with a cache-first worker that freezes the
+  # entire app on whatever version it happened to catch.
+  #
+  # `no-cache` means revalidate, not "do not store"; a 304 keeps it cheap.
+  #
+  # A request for the bare directory URL is matched here as index.html, because
+  # <Files> is evaluated against the resolved filename after DirectoryIndex.
+  <FilesMatch "^(index\.html|sw\.js|app\.webmanifest)$">
+    Header always set Cache-Control "no-cache"
+  </FilesMatch>
+
+  # Hashed-by-version shell assets can be cached hard: the service worker holds
+  # its own copies anyway, and any change to them ships with a CACHE_VERSION
+  # bump. Uncomment only if you are disciplined about that bump.
+  #<FilesMatch "\.(css|js|png|svg|woff2)$">
+  #  Header always set Cache-Control "public, max-age=604800"
+  #</FilesMatch>
+
+</IfModule>
+
+<IfModule mod_mime.c>
+  # Older Apache mime.types predates .webmanifest. Served as the wrong type it
+  # is not a manifest error you get, it is silence: the browser drops the
+  # <link rel="manifest"> and the app is simply never installable.
+  AddType application/manifest+json .webmanifest
+  AddType image/svg+xml .svg
+  # A module served as anything but a JS type is refused outright by the strict
+  # MIME check on <script type="module">.
+  AddType text/javascript .js
+  AddType text/javascript .mjs
+</IfModule>
+
+# No directory listings. There is nothing secret here — the whole app is source
+# — but /icons/ and /js/ are not pages and should not render as ones.
+<IfModule mod_autoindex.c>
+  Options -Indexes
+</IfModule>
+
+<IfModule mod_deflate.c>
+  # Optional, and purely a transfer-size win: the app is a few tens of KB of
+  # text. Binary assets are left out on purpose — PNG and WOFF2 are compressed
+  # already, and re-deflating them costs CPU for nothing.
+  AddOutputFilterByType DEFLATE text/html text/css text/javascript application/javascript application/json application/manifest+json image/svg+xml
+</IfModule>

@@ -780,6 +780,8 @@ export default async function run(t) {
   await putSetting('panel', { width: 200, height: 200, type: 1, model: 3 });
   t.check('an object setting round-trips',
     JSON.stringify(await getSetting('panel', null)), '{"width":200,"height":200,"type":1,"model":3}');
+  // (null/undefined settings are checked after the export block, so the extra kv
+  // rows cannot skew the settings counts the export asserts.)
 
   t.check('no program saved yet', String(await loadProgram()), 'null');
   const program = {
@@ -934,6 +936,32 @@ export default async function run(t) {
   t.check('a replace-import of an empty backup empties the library',
     (await listImages()).length, 0);
 
+  // A live Date in a hand-built backup must survive the decode rather than
+  // becoming null (exportAll tags its own dates, so only hand-built files hit it).
+  await reset();
+  await importAll({
+    format: EXPORT_FORMAT,
+    version: 1,
+    images: [],
+    settings: { lastRun: new Date(86400000), tagged: { __type: 'date', iso: '1970-01-02T00:00:00.000Z' } },
+    program: null,
+  });
+  t.check('a live Date in an imported setting survives',
+    (await getSetting('lastRun', null)) instanceof Date, true);
+  t.check('a tagged date decodes to the same instant',
+    (await getSetting('tagged', null)).getTime(), 86400000);
+
+  /* ── settings: null vs undefined ───────────────────────────────────────── */
+
+  await putSetting('cleared', null);
+  t.check('a stored null beats the fallback (null is a real value)',
+    String(await getSetting('cleared', 'fallback')), 'null');
+  // Easy to write by accident -- putSetting(key, form.value) on a field the user
+  // never filled in. It has to read back as "unset", not as undefined.
+  await putSetting('blanked', undefined);
+  t.check('a stored undefined falls back, like an unwritten key',
+    await getSetting('blanked', 'fallback'), 'fallback');
+
   /* ── quota ─────────────────────────────────────────────────────────────── */
 
   // Node 22 defines globalThis.navigator as a getter-only accessor, so a plain
@@ -977,6 +1005,18 @@ export default async function run(t) {
   const afterKill = await listImages();
   t.check('storage re-opens transparently after a dead connection', names(afterKill), 'Before');
   t.check('and it really is a new connection', (await openDb()) === live, false);
+
+  // Two calls racing on the SAME dead handle must converge on one connection.
+  // If both dropped the cache, the second would orphan the connection the first
+  // just opened -- and an open connection with no reference left can never be
+  // closed, so it blocks the next tab's upgrade for the life of the page.
+  const doomed = await openDb();
+  doomed.close();
+  const raced = await Promise.all([listImages(), listImages(), getSetting('nothing', 'ok')]);
+  t.check('concurrent calls all survive a dead connection',
+    `${names(raced[0])}|${names(raced[1])}|${raced[2]}`, 'Before|Before|ok');
+  t.check('and they leave exactly one connection open, not one each',
+    idb.__connections(DB_NAME), 1);
 
   // versionchange: a second tab upgrading must not be blocked by our connection.
   await openDb();

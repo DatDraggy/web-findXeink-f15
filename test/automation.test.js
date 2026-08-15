@@ -64,6 +64,12 @@ export default function run(t) {
   t.check('...with no errors', good.errors.length, 0);
   t.check('...and no warnings', JSON.stringify(good.warnings), '[]');
 
+  // The program the cursor tests walk must itself be legal, or those tests are
+  // asserting the behaviour of something the UI would refuse to run.
+  const demoCheck = validate(demo());
+  t.ok('the representative program validates clean', demoCheck.ok === true);
+  t.check('...with no warnings either', JSON.stringify(demoCheck.warnings), '[]');
+
   t.ok('a bare block array is accepted as a program',
     validate([pic('a'), wait(20), GOTO]).ok === true);
   t.ok(`a wait of exactly ${MIN_WAIT_SECONDS} s is allowed`,
@@ -332,6 +338,15 @@ export default function run(t) {
     '[0]');
   t.check('a cursor restored from garbage still runs from the top',
     walk(restore(demo(), null), 2), 'show:a wait:20000');
+
+  // Editing a "repeat 3" down to "repeat 1" strands the saved iteration counter
+  // past the end of the loop; resuming it would run an extra pass of the body.
+  const shrunk = [pic('a'), wait(20), { type: 'repeat', times: 1, blocks: [pic('b'), wait(30)] }, GOTO];
+  const inRepeat = (iter) => ({ v: 1, stack: [{ i: 2, iter: 0 }, { i: 0, iter }], lastImageId: 'a', steps: 3, done: false });
+  t.check('restore rejects an iteration the repeat no longer reaches',
+    JSON.stringify(restore(shrunk, inRepeat(2)).position.path), '[0]');
+  t.check('...but keeps one that still fits',
+    JSON.stringify(restore(shrunk, inRepeat(0)).position.path), '[2,0]');
 
   /* ── the engine must never hang the tab ───────────────────────────────── */
   // validate() rejects this, but a hand-edited program must still terminate.

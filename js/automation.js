@@ -568,6 +568,15 @@ export function createCursor(program, opts = {}) {
         if (k < state.stack.length - 1) {
           const block = list[i];
           if (!block || block.type !== 'repeat' || !Array.isArray(block.blocks)) return false;
+          // The child frame's iteration counter must still fall inside this
+          // repeat's `times`. A live cursor never rests on iter === times: the
+          // frame is popped in the same step that increments it. So a state that
+          // does has outlived its program -- typically the user edited a
+          // "repeat 5" down to "repeat 2" between runs. Resuming it would run an
+          // extra pass through the body; starting the lap over is honest.
+          const child = state.stack[k + 1];
+          const childIter = Math.floor(Number(child && child.iter));
+          if (!(childIter >= 0) || childIter >= repeatTimes(block)) return false;
           list = block.blocks;
         }
       }

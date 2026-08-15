@@ -312,6 +312,22 @@ export default function run(t) {
   t.ok('saturation 200 pushes red further from grey',
     adjust(px(200, 100, 100), { saturation: 200 })[0] > 200);
 
+  // Settings arrive from stored presets and imported automation files, so a
+  // string or a null is reachable. A NaN would survive clamping and turn every
+  // channel into NaN, which quantize then resolves to palette index 0 -- a solid
+  // red panel with no error logged anywhere.
+  t.check('a non-numeric option is ignored, not turned into NaN',
+    list(adjust(px(10, 128, 250), { brightness: 'abc', contrast: undefined, saturation: 'x', gamma: null })),
+    '10,128,250,255');
+  t.check('an empty string reads as "not set"',
+    list(adjust(px(10, 128, 250), { brightness: '', saturation: '', gamma: '' })), '10,128,250,255');
+  t.check('numeric strings are still honoured', adjust(px(64, 64, 64), { gamma: '200' })[0], 128);
+  t.check('a NaN strength means full strength, not a NaN image',
+    list(quantize(grad, GW, GH, INKS, { dither: 'fs', strength: NaN })),
+    list(quantize(grad, GW, GH, INKS, { dither: 'fs', strength: 1 })));
+  t.ok('a NaN strength never yields an out-of-palette index',
+    quantize(grad, GW, GH, bw, { dither: 'atkinson', strength: 'oops' }).every((v) => v >= 0 && v < bw.length));
+
   t.ok('adjust returns the same array it was given', (() => {
     const a = px(1, 2, 3);
     return adjust(a, { brightness: 10 }) === a;

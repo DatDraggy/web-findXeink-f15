@@ -69,6 +69,22 @@ function clamp(n, lo, hi) {
   return n < lo ? lo : n > hi ? hi : n;
 }
 
+/**
+ * Read a numeric option, falling back when it is absent or not a finite number.
+ *
+ * Settings reach this module from stored presets and imported automation files,
+ * not just from range inputs, so a string or a null is entirely reachable. NaN
+ * must never get through: clamp() passes it (every comparison against NaN is
+ * false), it then spreads through the whole error-diffusion buffer, and every
+ * nearest() distance becomes NaN so the matcher keeps its initial index -- the
+ * panel prints a solid RED screen with no error anywhere. Fall back instead.
+ */
+function num(v, fallback) {
+  if (v == null || v === '') return fallback;
+  const n = +v;
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /** Clamp to a byte and round, so plain Arrays behave exactly like typed arrays. */
 function byte(n) {
   return n <= 0 ? 0 : n >= 255 ? 255 : Math.round(n);
@@ -154,14 +170,15 @@ function gammaLut(pct) {
  * @param {Uint8ClampedArray|Uint8Array|number[]} rgba mutated in place
  * @param {{brightness?: number, contrast?: number, saturation?: number, gamma?: number}} [opts]
  *   brightness/contrast -100..100 (0 neutral), saturation 0..300 (100 neutral),
- *   gamma 10..300 percent (100 neutral). Out-of-range values are clamped.
+ *   gamma 10..300 percent (100 neutral). Out-of-range values are clamped;
+ *   missing or non-numeric ones fall back to neutral.
  * @returns {typeof rgba} the same array, for chaining
  */
 export function adjust(rgba, opts = {}) {
-  const bri = clamp(+opts.brightness || 0, -100, 100) * 2.55;
-  const con = clamp(+opts.contrast || 0, -100, 100) / 100;
-  const sat = clamp(opts.saturation == null ? 100 : +opts.saturation, 0, 300) / 100;
-  const gam = clamp(opts.gamma == null ? 100 : +opts.gamma, 10, 300);
+  const bri = clamp(num(opts.brightness, 0), -100, 100) * 2.55;
+  const con = clamp(num(opts.contrast, 0), -100, 100) / 100;
+  const sat = clamp(num(opts.saturation, 100), 0, 300) / 100;
+  const gam = clamp(num(opts.gamma, 100), 10, 300);
 
   // Classic contrast curve. The 1.015 fudge keeps the slope finite at con = 1
   // instead of dividing by zero.
@@ -266,7 +283,8 @@ const KERNEL_ATKINSON = [
  *   indices should refer to (use INKS or inksFor())
  * @param {{dither?: 'fs'|'atkinson'|'ordered'|'none', strength?: number, serpentine?: boolean}} [opts]
  *   strength 0..1 scales the diffused (or ordered) error; 0 is identical to
- *   nearest for every mode. serpentine only affects the diffusion modes.
+ *   nearest for every mode, and a missing or non-numeric strength means full
+ *   strength. serpentine only affects the diffusion modes.
  * @returns {Uint8Array} width*height indices into `palette`
  */
 export function quantize(rgba, width, height, palette, opts = {}) {
@@ -278,7 +296,7 @@ export function quantize(rgba, width, height, palette, opts = {}) {
   }
 
   const mode = opts.dither || 'none';
-  const strength = clamp(opts.strength == null ? 1 : +opts.strength, 0, 1);
+  const strength = clamp(num(opts.strength, 1), 0, 1);
   const nearest = makeMatcher(palette);
   const out = new Uint8Array(n);
 

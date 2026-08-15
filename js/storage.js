@@ -325,7 +325,13 @@ async function withTx(names, mode, fn) {
     // the browser evicted our storage. Same failure family as a stale GATT handle
     // after a BLE disconnect: re-acquire the handle instead of handing the user
     // an InvalidStateError they can do nothing with.
-    forgetConnection();
+    //
+    // Drop it only if it is STILL the cached one. Two calls racing on the same
+    // dead handle both land here; if the second also cleared the cache it would
+    // orphan the connection the first has just opened -- and an open connection
+    // nobody holds a reference to can never be closed, so it blocks the next
+    // tab's upgrade forever. That is the deadlock this module exists to avoid.
+    if (cachedDb === db) forgetConnection();
     db = await openDb();
     tx = db.transaction(names, mode);
   }
@@ -651,7 +657,10 @@ export async function getSetting(key, fallback = undefined) {
   const rec = await withTx([STORE_KV], 'readonly', (tx) => (
     request(tx.objectStore(STORE_KV).get(String(key)))
   ));
-  return rec ? rec.value : fallback;
+  // A stored `undefined` means the same thing to a caller as no row at all, and
+  // it is easy to write one (putSetting(key, form.value) on an empty field). Only
+  // `null` is a real stored value here, so it must still beat the fallback.
+  return rec && rec.value !== undefined ? rec.value : fallback;
 }
 
 /**
@@ -842,6 +851,10 @@ function decodeValue(value, depth = 0) {
   const B = globalThis.Blob;
   if (B && value instanceof B) return value;
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return value;
+  // A live Date reaches here only from a hand-built object (exportAll tags its
+  // own). Without this it falls through to the plain-object test, fails it, and
+  // becomes null -- a silent data loss for one line of passthrough.
+  if (value instanceof Date) return value;
 
   if (typeof value.__type === 'string') {
     if (value.__type === 'blob') {
