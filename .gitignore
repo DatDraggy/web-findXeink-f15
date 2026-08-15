@@ -13,3 +13,6 @@ reports/
 Thumbs.db
 .vscode/
 .idea/
+
+# Scratch files. Anything named tmp-* is working material, never a deliverable.
+tmp-*

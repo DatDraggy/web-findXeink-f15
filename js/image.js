@@ -130,7 +130,9 @@ export function inksFor(ids) {
 /**
  * Packed buffer size in bytes. The stream is flat, so this is just a bit count
  * rounded up -- no row padding. Multiplying before dividing (rather than the
- * usual >> 2) keeps it correct for panels large enough to overflow 32-bit shifts.
+ * usual >> 2) keeps the size correct for panels large enough to overflow 32-bit
+ * shifts, though pack() itself indexes with >> and so tops out at 2^31 pixels.
+ * Real panels are five orders of magnitude below that.
  *
  * @param {number} width
  * @param {number} height
@@ -387,15 +389,21 @@ export function applyCircleMask(indices, width, height, palette) {
   let white = palette.findIndex(isWhiteInk);
   if (white < 0) white = makeMatcher(palette)(255, 255, 255);
 
+  // Measure from PIXEL CENTRES (x + 0.5), not from each pixel's top-left corner.
+  // The corner form looks equivalent and is not: it puts the disk half a pixel up
+  // and to the left, so at 200x200 the top row keeps 1 pixel while the bottom row
+  // keeps 29 (likewise the left and right columns). The area comes out right --
+  // 31415 of pi*r^2 = 31415.9 -- which is exactly why the mistake survives an
+  // area check; it is the silhouette on a round panel that gives it away.
   const cx = width / 2;
   const cy = height / 2;
   const r = Math.min(width, height) / 2;
   const r2 = r * r;
   for (let y = 0; y < height; y++) {
-    const dy = y - cy;
+    const dy = y + 0.5 - cy;
     const dy2 = dy * dy;
     for (let x = 0; x < width; x++) {
-      const dx = x - cx;
+      const dx = x + 0.5 - cx;
       if (dx * dx + dy2 > r2) indices[y * width + x] = white;
     }
   }
@@ -438,8 +446,12 @@ function eachInDeviceOrder(width, height, model, fn) {
 export function pack(indices, width, height, palette, opts = {}) {
   checkDims(width, height);
   checkPalette(palette);
-  const bpp = opts.bpp == null ? 2 : opts.bpp;
-  const model = opts.model == null ? 3 : opts.model;
+  // Coerce, do not just default. `model` is compared with === 4, so a "4" that
+  // came out of a <select>.value or a JSON preset would silently fall through to
+  // row-major and print the F20's picture rotated -- a wrong image with no error
+  // anywhere. (`bpp` would at least throw in bufferSize, but be consistent.)
+  const bpp = num(opts.bpp, 2);
+  const model = num(opts.model, 3);
   const total = width * height;
   if (indices.length < total) {
     throw new RangeError(`image: ${indices.length} indices, need ${total} for ${width}x${height}`);
@@ -494,8 +506,8 @@ export function pack(indices, width, height, palette, opts = {}) {
  */
 export function unpack(bytes, width, height, opts = {}) {
   checkDims(width, height);
-  const bpp = opts.bpp == null ? 2 : opts.bpp;
-  const model = opts.model == null ? 3 : opts.model;
+  const bpp = num(opts.bpp, 2);
+  const model = num(opts.model, 3);
   const palette = opts.palette;
   const need = bufferSize(width, height, bpp);
   if (bytes.length < need) {
