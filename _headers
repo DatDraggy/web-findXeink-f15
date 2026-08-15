@@ -1,0 +1,87 @@
+# Response headers for Cloudflare Pages and Netlify.
+#
+# This is the annotated source of truth for the hardening headers. vercel.json
+# must express EXACTLY the same policy — JSON has no comments, so
+# the reasoning lives here.
+#
+# ---------------------------------------------------------------------------
+# Permissions-Policy: deny everything, then hand back the two things we use.
+#
+# The app needs a Bluetooth radio and a screen that stays awake. It has no
+# business asking for anything else, so every other powerful feature is denied
+# outright with an empty allowlist `()` — not merely unused, but unavailable, so
+# a future dependency-free-but-careless edit cannot quietly start using one.
+#
+#   bluetooth=(self)          Web Bluetooth. The whole point of the app.
+#   screen-wake-lock=(self)   The automation runner holds a wake lock so a long
+#                             image queue is not killed by the screen locking.
+#
+# Both already default to `self`; naming them documents the intent and keeps the
+# deny-list honest. Browsers that do not know a feature name ignore that entry
+# (Chrome logs a console notice) — harmless, and worth it for the ones that do.
+#
+# ---------------------------------------------------------------------------
+# Content-Security-Policy notes:
+#
+# connect-src is 'self', NOT 'none'. The app itself never makes a network request
+# at runtime, so 'none' looks right — and the two things people expect it to
+# break, it does not break:
+#
+#   * Service worker REGISTRATION is unaffected. Fetching sw.js is a worker
+#     request, matched by worker-src (CSP3 falls worker-src back to child-src,
+#     then script-src, then default-src). connect-src is never consulted.
+#   * The MANIFEST fetch is unaffected. <link rel="manifest"> is matched by
+#     manifest-src, falling back to default-src. Again not connect-src.
+#
+# What 'none' does break is everything the worker does after that. A worker runs
+# under the CSP delivered with its own script response — this policy, since the
+# rule below applies to every path — and the requests it makes are connect-src
+# requests: plain fetch(), and cache.add()/addAll(), which are defined in terms
+# of fetch with an empty request destination.
+#
+# Under 'none' the worker would therefore install, activate, and never fetch a
+# byte. Nothing is precached; and since sw.js is cache-first, every cache miss
+# it then handles has no fallback left. Registering successfully makes that
+# worse, not better — the app breaks *more* thoroughly than if the worker had
+# failed outright, and it does it silently.
+#
+# 'self' is the narrowest value that actually works. It still blocks every
+# cross-origin request, so there is no path off this origin for a photo picked
+# out of the library or anything read back from the display. Web Bluetooth is not
+# governed by CSP at all, so nothing here constrains the device link.
+#
+# To check any of this for yourself in 30 seconds: change connect-src in
+# serve.js's SECURITY_HEADERS, hard-reload, and watch DevTools -> Application ->
+# Service Workers alongside the console. Under 'none' you should see the worker
+# register and activate normally, "Refused to connect … connect-src" errors
+# raised from sw.js, and Application -> Cache Storage left empty.
+#
+# script-src 'self' forbids inline <script> — entry points must be
+# <script type="module" src="./js/main.js">. style-src 'self' likewise forbids
+# both <style> blocks and inline style="..." attributes; all CSS belongs in
+# css/app.css. Setting element.style.* from JS is CSSOM, not CSP, and is fine.
+#
+# img-src allows data: and blob: because the preview canvas and the file picker
+# produce exactly those.
+
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  Permissions-Policy: accelerometer=(), ambient-light-sensor=(), autoplay=(), camera=(), display-capture=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), local-fonts=(), magnetometer=(), microphone=(), midi=(), payment=(), serial=(), usb=(), bluetooth=(self), screen-wake-lock=(self)
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Cross-Origin-Opener-Policy: same-origin
+
+# The files that decide whether an update is ever seen. Everything else reaches
+# the browser through the service worker and is versioned by its CACHE_VERSION,
+# but these are fetched by the browser itself and must not sit in an HTTP cache.
+# sw.js is the critical one: the worker is only replaced when the browser sees
+# that its bytes changed, so an HTTP-cached sw.js is a worker that can never be
+# updated — and with a cache-first worker, that freezes the whole app.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
+/app.webmanifest
+  Cache-Control: no-cache

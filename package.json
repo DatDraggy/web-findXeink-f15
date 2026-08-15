@@ -1,0 +1,39 @@
+{
+  "name": "web-findxeink-f15",
+  "version": "1.0.0",
+  "description": "Drive a FindXeink F15 BLE e-ink picture display straight from a phone browser over Web Bluetooth. Static site, no build step, no dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Web FindXeink F15 contributors",
+  "keywords": [
+    "web-bluetooth",
+    "bluetooth",
+    "ble",
+    "e-ink",
+    "eink",
+    "epaper",
+    "findxeink",
+    "f15",
+    "pwa",
+    "dithering",
+    "floyd-steinberg",
+    "no-dependencies"
+  ],
+  "homepage": "https://findx.kieran.de/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DatDraggy/web-findXeink-f15.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DatDraggy/web-findXeink-f15/issues"
+  },
+  "scripts": {
+    "test": "node test/run.js",
+    "serve": "node serve.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

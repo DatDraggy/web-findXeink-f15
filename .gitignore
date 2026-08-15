@@ -1,0 +1,15 @@
+# Never needed: this project has zero dependencies on purpose.
+node_modules/
+
+# Generated at runtime by serve.js (self-signed dev certificate + its SAN stamp).
+certs/
+
+# Local scratch output.
+reports/
+*.log
+
+# OS / editor cruft.
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

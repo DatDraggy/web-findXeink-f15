@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0d1117">
+<meta name="description" content="Open-source Web Bluetooth app for FindXeink e-ink picture displays. Send photos, text and QR codes, and run an automated slideshow. No account, no server, no tracking.">
+<title>Web FindXeink F15</title>
+<link rel="manifest" href="./app.webmanifest">
+<link rel="icon" href="./icons/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<link rel="stylesheet" href="./css/app.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">Web FindXeink <span>F15</span></div>
+  <div class="status">
+    <span class="dot" id="conn-dot"></span>
+    <span id="conn-text">Not connected</span>
+  </div>
+</header>
+
+<nav id="nav">
+  <button data-view="device" class="on">
+    <svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 21h6"/></svg>
+    Device
+  </button>
+  <button data-view="studio">
+    <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m21 16-5-5-6 6"/></svg>
+    Studio
+  </button>
+  <button data-view="library">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    Library
+  </button>
+  <button data-view="automate">
+    <svg viewBox="0 0 24 24"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>
+    Automate
+  </button>
+  <button data-view="advanced">
+    <svg viewBox="0 0 24 24"><path d="m8 9-3 3 3 3"/><path d="m16 9 3 3-3 3"/><path d="m13 6-2 12"/></svg>
+    Advanced
+  </button>
+</nav>
+
+<main>
+
+<!-- ══════════════════════════════════════════════════════ DEVICE ══ -->
+<section id="view-device" class="on">
+  <div id="env-banner"></div>
+
+  <div class="card">
+    <h2>Connection</h2>
+    <button class="btn wide" id="btn-connect">Find my display</button>
+    <button class="btn sec wide" id="btn-disconnect" hidden>Disconnect</button>
+    <div class="row mt-8">
+      <button class="btn sec small" id="btn-pick-all">Show all devices</button>
+      <button class="btn sec small" id="btn-reconnect" hidden>Reconnect</button>
+    </div>
+    <table id="dev-table" class="mt-12"></table>
+  </div>
+
+  <div class="card" id="panel-card">
+    <h2>Panel <span class="sub" id="panel-source"></span></h2>
+    <p class="dim">The display broadcasts its own size and colour depth. This is read
+    automatically — you should not have to know it.</p>
+    <div class="row">
+      <div><label for="panel-w">Width</label><input id="panel-w" type="number" min="1" max="4000" value="200"></div>
+      <div><label for="panel-h">Height</label><input id="panel-h" type="number" min="1" max="4000" value="200"></div>
+      <div><label for="panel-bpp">Colours</label>
+        <select id="panel-bpp">
+          <option value="2">4 colour (2 bpp)</option>
+          <option value="1">Black &amp; white (1 bpp)</option>
+        </select>
+      </div>
+    </div>
+    <label for="panel-model">Pixel order</label>
+    <select id="panel-model">
+      <option value="3">Row-major — F15, Wallet, Air Wallet Pro</option>
+      <option value="4">Column-major from the right — F20 only</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <h2>If it will not appear</h2>
+    <ol class="steps">
+      <li><b>Turn Location Services on.</b> Android returns zero Bluetooth results with location off,
+        silently. This is the most common cause by far.</li>
+      <li><b>Un-pair the display</b> in Android Settings if you ever paired it — a bonded device
+        often stops advertising.</li>
+      <li><b>Close the official app.</b> The display accepts one connection at a time.</li>
+      <li><b>Press its button</b> to wake it immediately before searching.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════ STUDIO ══ -->
+<section id="view-studio">
+  <div class="card">
+    <h2>What to show</h2>
+    <label for="src-kind" class="sr-only">Source type</label>
+    <select id="src-kind">
+      <option value="image">Photo</option>
+      <option value="text">Text</option>
+      <option value="qr">QR code</option>
+      <option value="clock">Clock</option>
+      <option value="test">Test pattern</option>
+    </select>
+
+    <div data-src="image">
+      <label for="src-file">Choose a picture</label>
+      <input type="file" id="src-file" accept="image/*">
+      <div id="crop-box" hidden>
+        <label>Crop <span class="dim">— drag to move, pinch or scroll to zoom</span></label>
+        <div class="crop-window"><canvas id="crop-canvas"></canvas></div>
+        <div class="field-label"><span>Zoom</span><b id="lbl-zoom">100%</b></div>
+        <input type="range" id="crop-zoom" min="100" max="400" value="100">
+        <button class="btn sec small" id="btn-crop-reset">Reset crop</button>
+      </div>
+    </div>
+
+    <div data-src="text" hidden>
+      <label for="src-text">Text</label>
+      <textarea id="src-text" placeholder="Hello&#10;world"></textarea>
+      <div class="row">
+        <div><label for="src-text-align">Align</label>
+          <select id="src-text-align"><option value="center">Centre</option><option value="left">Left</option><option value="right">Right</option></select>
+        </div>
+        <div><label for="src-text-fg">Ink</label>
+          <select id="src-text-fg"><option value="black">Black</option><option value="red">Red</option><option value="yellow">Yellow</option><option value="white">White</option></select>
+        </div>
+        <div><label for="src-text-bg">Background</label>
+          <select id="src-text-bg"><option value="white">White</option><option value="black">Black</option><option value="red">Red</option><option value="yellow">Yellow</option></select>
+        </div>
+      </div>
+      <div class="check"><input type="checkbox" id="src-text-bold" checked><label for="src-text-bold">Bold</label></div>
+    </div>
+
+    <div data-src="qr" hidden>
+      <label for="qr-kind">Contents</label>
+      <select id="qr-kind">
+        <option value="text">Text or URL</option>
+        <option value="vcard">Contact card</option>
+        <option value="wifi">Wi-Fi login</option>
+      </select>
+      <div data-qr="text">
+        <label for="qr-text">Text or URL</label>
+        <input id="qr-text" placeholder="https://example.com">
+      </div>
+      <div data-qr="vcard" hidden>
+        <div class="row">
+          <div><label for="qr-name">Name</label><input id="qr-name"></div>
+          <div><label for="qr-org">Organisation</label><input id="qr-org"></div>
+        </div>
+        <div class="row">
+          <div><label for="qr-phone">Phone</label><input id="qr-phone" type="tel"></div>
+          <div><label for="qr-email">Email</label><input id="qr-email" type="email"></div>
+        </div>
+        <label for="qr-url">Website</label><input id="qr-url" type="url">
+      </div>
+      <div data-qr="wifi" hidden>
+        <div class="row">
+          <div><label for="qr-ssid">Network name</label><input id="qr-ssid"></div>
+          <div><label for="qr-pass">Password</label><input id="qr-pass"></div>
+        </div>
+        <label for="qr-sec">Security</label>
+        <select id="qr-sec"><option value="WPA">WPA / WPA2</option><option value="WEP">WEP</option><option value="nopass">Open</option></select>
+      </div>
+      <label for="qr-ecc">Error correction</label>
+      <select id="qr-ecc">
+        <option value="L">L — smallest modules</option>
+        <option value="M" selected>M — recommended</option>
+        <option value="Q">Q</option>
+        <option value="H">H — most robust</option>
+      </select>
+    </div>
+
+    <div data-src="clock" hidden>
+      <label for="clock-format">Format</label>
+      <select id="clock-format">
+        <option value="both">Time and date</option>
+        <option value="time">Time only</option>
+        <option value="date">Date only</option>
+      </select>
+      <p class="dim tiny">Rendered fresh every time it is sent, so an automation keeps it current.</p>
+    </div>
+
+    <div data-src="test" hidden>
+      <label for="test-pattern">Pattern</label>
+      <select id="test-pattern"></select>
+      <p class="dim tiny">Solid black first is the honest test: the panel is already blank, so solid
+      white cannot be told apart from a failed send.</p>
+    </div>
+  </div>
+
+  <div class="card sticky-preview" id="preview-card">
+    <h2>Preview <span class="sub" id="preview-meta"></span></h2>
+    <div class="preview-wrap"><canvas id="preview" class="preview" width="200" height="200"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Send</h2>
+    <label for="send-family">Send to</label>
+    <select id="send-family">
+      <option value="picture">Main screen</option>
+      <option value="card">Contact screen — double-press the button to show it</option>
+    </select>
+    <button class="btn wide" id="btn-send">Send to display</button>
+    <div class="bar"><i id="send-bar"></i></div>
+    <div class="dim tiny" id="send-status"></div>
+    <div class="row mt-6">
+      <button class="btn sec small" id="btn-save">Save to library</button>
+      <button class="btn sec small" id="btn-save-send">Save and send</button>
+    </div>
+  </div>
+
+  <div class="card" id="adjust-card">
+    <h2>Picture settings</h2>
+    <div class="row">
+      <div><label for="set-fit">Fit</label>
+        <select id="set-fit"><option value="cover">Fill (crop)</option><option value="contain">Fit inside</option><option value="stretch">Stretch</option></select>
+      </div>
+      <div><label for="set-rotate">Rotate</label>
+        <select id="set-rotate"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select>
+      </div>
+      <div><label for="set-dither">Dither</label>
+        <select id="set-dither">
+          <option value="fs">Floyd–Steinberg</option>
+          <option value="atkinson">Atkinson</option>
+          <option value="ordered">Ordered</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field-label"><span>Brightness</span><b id="lbl-brightness">0</b></div>
+    <input type="range" id="set-brightness" min="-100" max="100" value="0">
+    <div class="field-label"><span>Contrast</span><b id="lbl-contrast">0</b></div>
+    <input type="range" id="set-contrast" min="-100" max="100" value="0">
+    <div class="field-label"><span>Saturation</span><b id="lbl-saturation">100</b></div>
+    <input type="range" id="set-saturation" min="0" max="300" value="100">
+    <div class="field-label"><span>Gamma</span><b id="lbl-gamma">100</b></div>
+    <input type="range" id="set-gamma" min="10" max="300" value="100">
+    <div class="field-label"><span>Dither strength</span><b id="lbl-strength">100</b></div>
+    <input type="range" id="set-strength" min="0" max="100" value="100">
+
+    <label>Inks this panel has</label>
+    <div class="inks" id="ink-toggles"></div>
+
+    <div class="check"><input type="checkbox" id="set-circle"><label for="set-circle">Round display — mask the corners to white</label></div>
+    <button class="btn sec small" id="btn-reset-settings">Reset settings</button>
+  </div>
+</section>
+
+<!-- ═════════════════════════════════════════════════════ LIBRARY ══ -->
+<section id="view-library">
+  <div class="card">
+    <h2>Library <span class="sub" id="lib-count"></span></h2>
+    <p class="dim">Saved pictures live in this browser only. Nothing is uploaded anywhere — there is
+    no server in this project.</p>
+    <div class="grid" id="lib-grid"></div>
+    <div id="lib-empty" class="dim" hidden>Nothing saved yet. Make something in Studio and tap
+      <b>Save to library</b>.</div>
+  </div>
+
+  <div class="card" id="lib-actions" hidden>
+    <h2>Selected</h2>
+    <div id="lib-selected-meta" class="dim tiny"></div>
+    <button class="btn wide" id="btn-lib-send">Send to display</button>
+    <div class="row mt-6">
+      <button class="btn sec small" id="btn-lib-edit">Open in Studio</button>
+      <button class="btn sec small" id="btn-lib-rename">Rename</button>
+      <button class="btn danger small" id="btn-lib-delete">Delete</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Backup</h2>
+    <p class="dim">Your only copy is in this browser's storage. Clearing site data erases it.</p>
+    <div class="row">
+      <button class="btn sec small" id="btn-export">Export everything</button>
+      <button class="btn sec small" id="btn-import">Import a backup</button>
+    </div>
+    <input type="file" id="import-file" accept="application/json" hidden>
+    <div class="dim tiny mt-8" id="storage-usage"></div>
+    <div class="check"><input type="checkbox" id="opt-persist"><label for="opt-persist">Ask the browser not to evict this data</label></div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ AUTOMATE ══ -->
+<section id="view-automate">
+  <div class="card">
+    <h2>Program</h2>
+    <p class="dim">Blocks run top to bottom. <b>Go to start</b> makes it loop forever. A wait of at
+    least 20 seconds is required between pictures — the panel physically needs that long to
+    redraw.</p>
+    <div class="blocks" id="block-list"></div>
+    <div id="prog-empty" class="dim" hidden>No blocks yet.</div>
+    <hr>
+    <div class="row tight">
+      <button class="btn sec small" data-add="picture">+ Picture</button>
+      <button class="btn sec small" data-add="random">+ Random</button>
+      <button class="btn sec small" data-add="wait">+ Wait</button>
+      <button class="btn sec small" data-add="gotoStart">+ Go to start</button>
+    </div>
+    <div id="prog-issues"></div>
+    <div class="dim tiny" id="prog-estimate"></div>
+  </div>
+
+  <div class="card">
+    <h2>Run</h2>
+    <div class="check">
+      <input type="checkbox" id="opt-wakelock">
+      <label for="opt-wakelock">Keep the screen awake while running</label>
+    </div>
+    <p class="dim tiny">Web Bluetooth only lives while this page is open. If you switch apps or the
+    screen sleeps, the browser throttles it and the slideshow pauses — it will catch up when you come
+    back, skipping anything it missed rather than replaying it.</p>
+    <button class="btn wide" id="btn-run">Start automation</button>
+    <button class="btn sec wide" id="btn-stop" hidden>Stop</button>
+    <button class="btn sec wide" id="btn-kiosk" hidden>Full-screen view</button>
+    <div id="run-status" class="dim tiny mt-10"></div>
+  </div>
+
+  <div class="card">
+    <h2>Activity</h2>
+    <pre class="log" id="run-log">Not running.</pre>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ ADVANCED ══ -->
+<section id="view-advanced">
+  <div class="card">
+    <h2>Transfer</h2>
+    <label for="opt-chunk">Chunk size</label>
+    <input id="opt-chunk" type="number" min="1" max="240" value="200">
+    <p class="dim tiny">The destination screen is chosen per picture in Studio — the main screen uses
+    opcodes <code>A1</code>/<code>A2</code>, the contact screen <code>C1</code>/<code>C2</code>.</p>
+    <div class="check"><input type="checkbox" id="opt-obfuscate"><label for="opt-obfuscate">Obfuscate payloads (the vendor app randomises this; the device accepts both)</label></div>
+    <p class="dim tiny">A 200-byte chunk needs a negotiated MTU of at least 213. The browser will not
+    tell us what it got, so if a send is never acknowledged the app retries automatically at 10 —
+    exactly what the vendor app does.</p>
+  </div>
+
+  <div class="card">
+    <h2>Protocol console</h2>
+    <div class="row">
+      <div><label for="con-op">Opcode</label>
+        <select id="con-op">
+          <option value="a1">A1 start-picture</option>
+          <option value="a2">A2 picture-data</option>
+          <option value="c1">C1 start-card</option>
+          <option value="c2">C2 card-data</option>
+        </select>
+      </div>
+      <div><label for="con-seq">Seq (hex)</label><input id="con-seq" class="mono" value="FFFF"></div>
+    </div>
+    <label for="con-payload">Payload (hex)</label>
+    <input id="con-payload" class="mono" value="C8 00 00 27 10">
+    <div class="dim mono mt-8" id="con-preview"></div>
+    <div class="row mt-6">
+      <button class="btn sec small" id="btn-con-send">Send frame</button>
+      <button class="btn sec small" id="btn-explore">Read GATT table</button>
+    </div>
+    <pre class="log mt-10" id="con-log">No frames yet.</pre>
+  </div>
+
+  <div class="card">
+    <h2>Diagnostics</h2>
+    <div id="gatt-dump" class="dim tiny">Not read yet.</div>
+    <button class="btn sec small" id="btn-report">Download a report</button>
+    <p class="dim tiny">A JSON file describing what this page saw. Useful for a bug report — check it
+    before sharing; it contains your device's name and Bluetooth id.</p>
+  </div>
+
+  <div class="card">
+    <h2>Permissions this app uses</h2>
+    <table>
+      <tr><th>Bluetooth</th><td>Only when you tap <b>Find my display</b>, and only for the device you pick in the browser's own chooser.</td></tr>
+      <tr><th>Screen wake lock</th><td>Only while an automation runs, and only if you tick the box.</td></tr>
+      <tr><th>Storage</th><td>Your pictures and program, in this browser. No prompt, never uploaded.</td></tr>
+      <tr><th>Network</th><td>The page makes no requests at all after it loads, and the policy confines it to this site — nothing can reach a third party.</td></tr>
+    </table>
+    <p class="dim tiny">No account, no analytics, no cookies, no tracking. Works offline once loaded.</p>
+  </div>
+
+  <div class="card">
+    <h2>About</h2>
+    <p class="dim">An independent, unofficial app for FindXeink e-ink displays, built by
+    reverse-engineering the vendor's Android app for interoperability. Not affiliated with or
+    endorsed by FindXeink or Lenze Technology.</p>
+    <p class="dim tiny">MIT licensed. <span id="about-version" class="mono"></span></p>
+  </div>
+</section>
+
+</main>
+
+<div id="kiosk">
+  <button class="k-exit" id="btn-kiosk-exit">Exit</button>
+  <canvas id="kiosk-canvas"></canvas>
+  <div class="k-meta" id="kiosk-meta"></div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

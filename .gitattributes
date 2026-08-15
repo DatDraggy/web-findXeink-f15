@@ -1,0 +1,12 @@
+# Normalise to LF in the repository and in the working tree.
+#
+# This is a static site deployed to a Linux web server, and on Windows git would
+# otherwise hand contributors CRLF working copies — which then get uploaded
+# verbatim by anyone who deploys with a file copy rather than a checkout.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.ico binary
+*.jpg binary
+*.webp binary
