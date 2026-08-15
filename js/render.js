@@ -243,8 +243,28 @@ export function renderIndices(source, panel, settings) {
   // QR codes are generated straight into index space: scaling or dithering them
   // through the canvas would cost us the integer module alignment they need.
   if (source.kind === 'qr') {
-    const indices = qrToIndices(source.text || '', { ecc: source.ecc || 'M' }, W, H, palette);
-    if (s.circleMask) applyCircleMask(indices, W, H, palette);
+    const qrOpts = { ecc: source.ecc || 'M' };
+    if (!s.circleMask) {
+      return { indices: qrToIndices(source.text || '', qrOpts, W, H, palette), palette, width: W, height: H };
+    }
+
+    // On a round panel the usable area is the inscribed CIRCLE, not the square.
+    // Filling the square and then masking eats the corners — which is precisely
+    // where a QR keeps its three finder patterns, so past about version 6 the
+    // code stops being detectable at all. Render into the largest square that
+    // fits inside the circle instead (side = diameter / root 2) and centre it,
+    // so the whole symbol survives the mask.
+    const side = Math.max(1, Math.floor(Math.min(W, H) / Math.SQRT2));
+    const inner = qrToIndices(source.text || '', qrOpts, side, side, palette);
+    // The top-left pixel is quiet zone, so it is the light ink qrToIndices chose
+    // — more reliable than re-deriving it and risking a mismatched background.
+    const indices = new Uint8Array(W * H).fill(inner[0]);
+    const ox = Math.floor((W - side) / 2);
+    const oy = Math.floor((H - side) / 2);
+    for (let y = 0; y < side; y++) {
+      indices.set(inner.subarray(y * side, y * side + side), (oy + y) * W + ox);
+    }
+    applyCircleMask(indices, W, H, palette);
     return { indices, palette, width: W, height: H };
   }
 

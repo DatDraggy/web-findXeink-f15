@@ -174,8 +174,20 @@ npm init -y && npm pkg set type=module && npm install qrcode jsqr
    round-trip 96/96 across four ECC levels, two geometries and twelve payloads including vCard and
    Wi-Fi strings.
 
-`test/qrcode.test.js` then locks the result in as dependency-free golden matrices, so an accidental
-change fails immediately without anyone having to install anything.
+`test/qrcode.test.js` then locks the result in without anyone having to install anything: published
+ISO/IEC 18004 tables, the Annex I worked example, and an independent decoder written from the spec
+rather than by reversing the encoder.
+
+Two things a future verifier will rediscover, both already investigated:
+
+* **ZXing fails ~3 of 144 rendered panels at the spec-minimum 4-module quiet zone**, and does the
+  same on node-qrcode's own matrix. It is detector fussiness, not an encoder defect — jsQR reads all
+  of them. A wider quiet zone fixes it at the cost of smaller modules, which is the wrong trade on a
+  200x200 panel, so the default stays at the spec minimum.
+* **A QR on a round panel is a cross-module hazard.** The circle mask whitens the corners, which is
+  where the finder patterns live, so filling the square and then masking makes the code undetectable
+  from roughly version 6 up. `render.js` fits the symbol inside the inscribed circle
+  (side = diameter / root 2) instead; `test/render.test.js` checks all three finders survive.
 
 ## Reporting a device that will not work
 

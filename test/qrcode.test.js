@@ -844,12 +844,16 @@ export default function run(t) {
     'WIFI:T:WPA;S:a\\;b\\,c\\:d\\"e\\\\f;P:p\\;q;;');
   t.check('wifi does not escape apostrophes', wifi({ ssid: "Bob's WLAN", password: "it's fine" }),
     "WIFI:T:WPA;S:Bob's WLAN;P:it's fine;;");
-  // A value that is all hex AND exactly key-length is quoted; a hex-looking passphrase
-  // of any other length is not, because unnecessary quotes break naive parsers.
-  t.check('wifi quotes a raw-length hex key', wifi({ ssid: 'N', password: 'a'.repeat(64) }),
-    `WIFI:T:WPA;S:N;P:"${'a'.repeat(64)}";;`);
-  t.check('wifi quotes a 10-digit hex WEP key', wifi({ ssid: 'N', password: '0123456789', security: 'WEP' }),
-    'WIFI:T:WEP;S:N;P:"0123456789";;');
+  // Hex-looking values are never wrapped in double quotes. ZXing and Android unescape
+  // backslashes but do not strip quotes, so a quote would end up inside the value; and
+  // a 64-hex-digit password is the raw PSK (WPA passphrases stop at 63 characters), so
+  // quoting it would claim it is a passphrase.
+  t.check('wifi does not quote a 64-hex PSK', wifi({ ssid: 'N', password: 'a'.repeat(64) }),
+    `WIFI:T:WPA;S:N;P:${'a'.repeat(64)};;`);
+  t.check('wifi does not quote a 10-digit hex WEP key', wifi({ ssid: 'N', password: '0123456789', security: 'WEP' }),
+    'WIFI:T:WEP;S:N;P:0123456789;;');
+  t.check('wifi does not quote a hex-looking SSID', wifi({ ssid: '0123456789', password: 'p' }),
+    'WIFI:T:WPA;S:0123456789;P:p;;');
   t.check('wifi leaves a common numeric passphrase alone', wifi({ ssid: 'N', password: '12345678' }),
     'WIFI:T:WPA;S:N;P:12345678;;');
   t.check('wifi undefined arg', wifi(), 'WIFI:T:nopass;S:;;');

@@ -32,7 +32,7 @@
  * Otherwise you will spend an hour debugging code you are not running.
  */
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 
 /** Prefix shared by every cache this app owns, so we can tell ours from a neighbour's. */
 const CACHE_PREFIX = 'web-findxeink-f15-';

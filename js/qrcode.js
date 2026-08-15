@@ -698,6 +698,13 @@ export function qrToIndices(text, opts, width, height, palette) {
 
   const dark = inkIndex(palette, 'black');
   const light = inkIndex(palette, 'white');
+  // A QR code is two colours or it is nothing. The ink toggles can be reduced to a
+  // single ink (the UI keeps the last one ticked rather than allowing none), and a
+  // one-ink palette resolves dark and light to the same index — which would send a
+  // uniformly blank panel to the display with nothing to explain it. Say so instead.
+  if (dark === light) {
+    throw new Error('QR: a QR code needs two inks — this palette has only one usable colour');
+  }
   const out = new Uint8Array(w * h).fill(light);
 
   const drawn = qr.size * scale;
@@ -759,26 +766,23 @@ export function vcard(fields) {
 }
 
 /**
- * Lengths, in hex digits, that a raw (unhashed) WEP or WPA key can actually have:
- * WEP-40, WEP-104, WEP-128, WEP-232 and a WPA PSK. Nothing else is ambiguous.
- */
-const RAW_KEY_HEX_LENGTHS = new Set([10, 26, 32, 58, 64]);
-
-/**
  * Escape one WIFI: field. Only the five characters MECARD/ZXing define are escaped:
  * a backslash in front of anything else survives ZXing's permissive unescaper but
  * reaches Android's Wi-Fi QR parser as a literal backslash, which silently joins
  * with the wrong password.
+ *
+ * Hex-looking values are deliberately NOT wrapped in double quotes. That convention
+ * belongs to wpa_supplicant.conf, not to this format: ZXing's WifiResultParser and
+ * Android's own scanner unescape backslashes but never strip quotes, so the quotes
+ * end up inside the SSID or the passphrase and the join fails. It would also be
+ * backwards exactly where it matters — a WPA passphrase is 8..63 characters, so a
+ * 64-hex-digit value can only be the raw PSK, and quoting it claims the opposite.
+ * Unquoted is right either way: 64 hex digits read as a PSK, a 10-hex-digit WEP key
+ * reads as key bytes (a 10-character ASCII WEP key is not a legal length anyway),
+ * and any other length cannot be a key, so it reads as the passphrase it is.
  */
 function wifiEscape(s) {
-  const raw = String(s);
-  const v = raw.replace(/([\\;,:"])/g, '\\$1');
-  // A value that is all hex digits AND exactly as long as a real key is ambiguous —
-  // the reader may take it as key bytes rather than a passphrase — so it gets quoted.
-  // Quoting every hex-looking value instead would be worse: "12345678" is one of the
-  // most common passphrases there is, no key is 8 hex digits long, and a reader that
-  // does not strip the quotes would try to join with `"12345678"` including them.
-  return /^[0-9a-fA-F]+$/.test(raw) && RAW_KEY_HEX_LENGTHS.has(raw.length) ? `"${v}"` : v;
+  return String(s).replace(/([\\;,:"])/g, '\\$1');
 }
 
 /**
