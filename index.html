@@ -103,7 +103,7 @@
 <body>
 
 <header>
-  <div class="brand">Web FindXeink <span>F15</span></div>
+  <h1 class="brand">Web FindXeink <span>F15</span></h1>
   <div class="status">
     <span class="dot" id="conn-dot"></span>
     <span id="conn-text">Not connected</span>
@@ -182,6 +182,62 @@
       <li><b>Press its button</b> to wake it immediately before searching.</li>
     </ol>
   </div>
+
+  <!--
+    Real prose, deliberately visible rather than tucked behind a tab.
+
+    Everything above this point is application chrome: buttons, fields and status
+    text. A search engine arriving here would otherwise find almost no words about
+    what a FindXeink display is or why this page exists, and could not reasonably
+    rank it for the queries it is meant to answer. This section is written to be
+    genuinely useful to a first-time visitor — the SEO value follows from that,
+    not the other way round.
+  -->
+  <article class="card prose">
+    <h2>About FindXeink e-ink displays</h2>
+    <p>FindXeink displays are small, battery-powered electronic paper tags that hold a picture
+    without using any power to keep showing it. They are sold as mini digital photo frames, name
+    badges, fridge tags and luggage labels, in sizes from about 1.5 to 7.5 inches, usually in black,
+    white, red and yellow. You send a picture to one over Bluetooth from a phone; it redraws in
+    around twenty seconds and then keeps that image for months.</p>
+    <p><b>Web FindXeink F15</b> is a free, open-source replacement for the manufacturer's app. It
+    runs entirely in your browser using Web Bluetooth — there is nothing to install, no account, and
+    no server involved. Your pictures stay on your own device.</p>
+
+    <h3>Why the official app so often cannot find the display</h3>
+    <p>A very common complaint is that the tag appears in the phone's own Bluetooth list but the
+    FindXeink app never finds it, leaving a "Searching…" spinner that never resolves. Decompiling
+    that app turns up two separate causes, and either alone is enough.</p>
+    <p>The first is a permissions bug. The app asks for location access — which Android requires
+    before it will return <em>any</em> Bluetooth scan result — but its own check accepts the
+    <b>Approximate</b> option, while the system silently insists on <b>Precise</b>. Choose
+    Approximate and the app happily starts scanning, shows its spinner, and receives nothing at all
+    for sixty seconds. It contains no "no device found" message, so it never tells you. If you want
+    to try the official app again, granting it Precise location is the single most likely fix.</p>
+    <p>The second is a hard-coded filter. The app discards any device whose Bluetooth advertisement
+    does not contain a particular non-standard identifier, and it reads the phone's cached name for a
+    device rather than the name being broadcast — so a tag that has never been paired can be thrown
+    away on sight. This app applies neither check: it shows you every nearby device and lets you pick
+    yours.</p>
+
+    <h3>Which displays this works with</h3>
+    <p>Confirmed working on the <b>FindXeink F15</b> (200 × 200 pixels, four colours). The
+    <b>F20</b>, <b>FindXeink Wallet</b> and <b>Air Wallet Pro</b> are implemented from the same
+    protocol but have not been tested on real hardware — if you own one, the report button under
+    Advanced produces exactly what is needed to confirm it.</p>
+    <p>The hardware is white-labelled and sells under other brand names, so what is printed on the
+    box is a poor guide. A good sign is that the seller told you to install the FindXeink app, or
+    that the tag has a single button where a double-press shows a second "contact" screen.</p>
+
+    <h3>What you can put on the screen</h3>
+    <p>Photographs, dithered properly to the panel's four inks with control over brightness,
+    contrast and cropping. Plain text sized automatically to fill the display, for name badges and
+    labels. QR codes carrying a link, a contact card or Wi-Fi credentials. A clock that stays current
+    because it is redrawn each time it is sent. And an automation that cycles through a set of
+    pictures on a timer, turning the tag into a small changing photo frame.</p>
+    <p>The complete Bluetooth protocol — services, frame format, opcodes and image encoding — is
+    documented in the project's README, so anyone can write their own client.</p>
+  </article>
 </section>
 
 <!-- ══════════════════════════════════════════════════════ STUDIO ══ -->

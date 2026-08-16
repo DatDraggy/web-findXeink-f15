@@ -54,7 +54,8 @@ header {
   gap: 10px;
 }
 
-.brand { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+/* An h1 for semantics and search; the visual weight is deliberately modest. */
+.brand { font-weight: 700; font-size: 15px; letter-spacing: -0.01em; margin: 0; }
 .brand span { color: var(--dim); font-weight: 400; }
 
 .status {
@@ -157,6 +158,33 @@ section.on { display: block; animation: fade 0.18s ease; }
 .card > h2 .sub { text-transform: none; letter-spacing: 0; font-weight: 400; }
 
 h3 { font-size: 14px; margin: 14px 0 6px; }
+
+/* Long-form explanatory text. The card headings elsewhere are small uppercase
+   labels; an article needs headings that read as headings and a comfortable
+   measure, so it opts out of that treatment. */
+.prose > h2 {
+  font-size: 17px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--fg);
+  font-weight: 700;
+  margin: 0 0 10px;
+}
+.prose h3 {
+  font-size: 14px;
+  color: var(--fg);
+  font-weight: 600;
+  margin: 20px 0 6px;
+}
+.prose p {
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1.65;
+  margin: 0 0 10px;
+  max-width: 62ch;
+}
+.prose b { color: var(--fg); font-weight: 600; }
+.prose em { color: var(--fg); font-style: normal; text-decoration: underline dotted; }
 p { margin: 6px 0; }
 .dim { color: var(--dim); font-size: 13px; }
 .tiny { font-size: 12px; }
