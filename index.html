@@ -5,12 +5,100 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0d1117">
-<meta name="description" content="Open-source Web Bluetooth app for FindXeink e-ink picture displays. Send photos, text and QR codes, and run an automated slideshow. No account, no server, no tracking.">
-<title>Web FindXeink F15</title>
+<meta name="description" content="Send pictures to a FindXeink e-ink display from your browser when the official app cannot find it. Free, open source, no account, works in Chrome.">
+<title>Web FindXeink F15 — browser app when the official one fails</title>
 <link rel="manifest" href="./app.webmanifest">
 <link rel="icon" href="./assets/icons/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="./assets/icons/apple-touch-icon.png">
 <link rel="stylesheet" href="./css/app.css">
+
+<!--
+  The absolute URLs below are the one place this file is tied to a host. A fork
+  serving it elsewhere should change them or drop them; everything else in the
+  app is relative and works from any origin or subdirectory.
+-->
+<link rel="canonical" href="https://findx.kieran.de/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Web FindXeink F15">
+<meta property="og:title" content="Web FindXeink F15 — browser app when the official one fails">
+<meta property="og:description" content="A browser app for FindXeink e-ink picture displays. Open it, pick your display, send a picture. Free and open source.">
+<meta property="og:url" content="https://findx.kieran.de/">
+<meta property="og:image" content="https://findx.kieran.de/assets/icons/icon-512.png">
+<meta name="twitter:card" content="summary">
+
+<!--
+  Structured data. The FAQ entries are deliberately the questions people actually
+  type when their tag will not connect — that is the search this project exists to
+  answer, and the answers are the findings from decompiling the vendor app.
+
+  This is a data block, not executable script, so `script-src 'self'` does not
+  block it. Verified against the shipped CSP rather than assumed.
+-->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Web FindXeink F15",
+      "url": "https://findx.kieran.de/",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Android, Windows, macOS, Linux (Chrome or Edge)",
+      "browserRequirements": "Requires Web Bluetooth (Chromium-based browser)",
+      "description": "Open-source Web Bluetooth app for FindXeink e-ink picture displays. Sends photos, text and QR codes, and runs an automated slideshow, without the vendor app.",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+      "codeRepository": "https://github.com/DatDraggy/web-findXeink-f15"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Why can't the FindXeink app find my display?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Two faults in the vendor app, either of which alone stops it finding anything. First, it asks for location permission but accepts the Approximate option, while Android silently returns zero Bluetooth results unless Precise location is granted — the app shows its Searching spinner and never reports an error. Try Android Settings, Apps, FindXeink, Permissions, Location, Precise. Second, it discards any device whose advertisement does not contain the service UUID 0x1644, and it reads the Bluetooth stack's cached device name rather than the advertised one, so a never-paired tag can be dropped on sight. This web app applies none of those checks."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I use a FindXeink display without installing the app?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Web FindXeink F15 runs in Chrome and talks to the display over Web Bluetooth. There is no install, no account and no server: open the page, tap Find my display, pick your device in the browser's own chooser, and send a picture. It also works offline once loaded."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Which FindXeink devices are supported?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Confirmed working on the FindXeink F15 (200x200, four colour). The protocol and model table also cover the F20, FindXeink Wallet and Air Wallet Pro, which are untested. The same hardware is sold white-labelled under other brand names, so the brand on the box is a poor guide — if the display was set up with the FindXeink app, or has a single button where a double-press shows a second contact screen, it is very likely compatible."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What Bluetooth protocol does the FindXeink display use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "GATT service 0xFFF0, writing to characteristic 0xFFF3 without response and receiving notifications on 0xFFF4. Frames are BC, opcode, big-endian sequence, two random bytes, length, payload, CRC-16/CCITT-FALSE and a 0xAA trailer; the device replies with CC and a 0x55 trailer. The panel's size and colour depth are broadcast in the advertisement under manufacturer company ID 0x1A46. The full specification is documented in the project's README."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "My e-ink tag shows in Bluetooth settings but not in the app. What now?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Turn Location Services on, since Android returns no Bluetooth scan results without it. Un-pair the display in Bluetooth settings if you ever paired it, because a bonded peripheral often stops advertising. Force-stop the official app, as these displays accept only one connection at a time. Then press the device's button to wake it and search again."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
 
@@ -392,6 +480,15 @@
     reverse-engineering the vendor's Android app for interoperability. Not affiliated with or
     endorsed by FindXeink or Lenze Technology.</p>
     <p class="dim tiny">MIT licensed. <span id="about-version" class="mono"></span></p>
+    <a class="btn sec wide" id="link-github"
+       href="https://github.com/DatDraggy/web-findXeink-f15"
+       target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      Source code and issues on GitHub
+    </a>
+    <p class="dim tiny">Found a device this does not work with? A report from above, attached to a
+    GitHub issue, is exactly what is needed — especially for the F20, Wallet and Air Wallet Pro,
+    which are implemented from the vendor app but never tested on real hardware.</p>
   </div>
 </section>
 

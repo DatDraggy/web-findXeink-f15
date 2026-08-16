@@ -1,0 +1,6 @@
+# Everything here is public and static. Nothing to hide from a crawler.
+User-agent: *
+Allow: /
+
+# Change the host if you fork this to your own domain.
+Sitemap: https://findx.kieran.de/sitemap.xml
